@@ -2,10 +2,41 @@ import nodemailer from "nodemailer";
 
 type Channel = "email" | "phone";
 
-export type DeliveryResult = { delivered: boolean; via: "smtp" | "twilio" | "console"; devCode?: string };
+export type DeliveryResult = { delivered: boolean; via: "smtp" | "brevo" | "twilio" | "console"; devCode?: string };
+
+/** Thrown when a configured provider rejects the message; shown to the user as a friendly 502. */
+export class DeliveryError extends Error {}
 
 const smtpConfigured = () => Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS);
+const brevoConfigured = () => Boolean(process.env.BREVO_API_KEY);
 const twilioConfigured = () => Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM);
+
+/** Brevo sender rules: up to 11 letters/digits, or 12–15 digits. */
+export function brevoSender(raw = process.env.BREVO_SMS_SENDER ?? "OneKey") {
+  const clean = raw.replace(/[^A-Za-z0-9]/g, "");
+  if (/^\d{12,15}$/.test(clean)) return clean;
+  return clean.slice(0, 11) || "OneKey";
+}
+
+/** Brevo transactional SMS — https://developers.brevo.com/docs/transactional-sms-endpoints */
+async function sendBrevoSms(to: string, text: string) {
+  const res = await fetch("https://api.brevo.com/v3/transactionalSMS/send", {
+    method: "POST",
+    headers: { "api-key": process.env.BREVO_API_KEY!, "content-type": "application/json", accept: "application/json" },
+    body: JSON.stringify({
+      sender: brevoSender(),
+      recipient: to.replace(/^\+/, ""), // E.164 digits with country code
+      content: text, // no opt-out/STOP text, so Brevo keeps it transactional
+      type: "transactional",
+      tag: "otp",
+    }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    console.error(`[OneKey] Brevo SMS failed (${res.status}): ${body.slice(0, 300)}`);
+    throw new DeliveryError("We couldn't send the SMS right now. Check the number, or sign up with email instead.");
+  }
+}
 
 function devFallback(to: string, code: string): DeliveryResult {
   console.info(`\n[OneKey] OTP for ${to}: ${code}\n`);
@@ -38,6 +69,11 @@ export async function sendOtp(channel: Channel, to: string, code: string, purpos
     return { delivered: true, via: "smtp" };
   }
 
+  if (channel === "phone" && brevoConfigured()) {
+    await sendBrevoSms(to, `${code} is your OneKey code to ${action}. It expires in 5 minutes. Never share it.`);
+    return { delivered: true, via: "brevo" };
+  }
+
   if (channel === "phone" && twilioConfigured()) {
     const sid = process.env.TWILIO_ACCOUNT_SID!;
     const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`, {
@@ -48,7 +84,7 @@ export async function sendOtp(channel: Channel, to: string, code: string, purpos
       },
       body: new URLSearchParams({ To: to, From: process.env.TWILIO_FROM!, Body: `${code} is your OneKey code to ${action}. Expires in 5 min.` }),
     });
-    if (!res.ok) throw new Error(`SMS delivery failed (${res.status})`);
+    if (!res.ok) throw new DeliveryError("We couldn't send the SMS right now. Check the number, or sign up with email instead.");
     return { delivered: true, via: "twilio" };
   }
 

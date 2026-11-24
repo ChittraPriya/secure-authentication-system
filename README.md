@@ -6,7 +6,7 @@ A Next.js 15 (App Router) + TypeScript app that implements the assignment:
 |---|---|
 | Sign up with **email or phone** | Tabbed input; email normalised to lowercase, phone normalised to E.164 (`+919876543210`) |
 | Collect **DOB and surname** | First name, surname (Unicode-aware validation), DOB with age check (13–120) |
-| Login by **6-digit code** | Secure OTP via email (SMTP) or SMS (Twilio), with a dev-mode fallback |
+| Login by **6-digit code** | Secure OTP via email (SMTP: Gmail or Brevo) or SMS (Brevo or Twilio), with a dev-mode fallback |
 | Login by **Face ID / biometrics** | WebAuthn **passkeys**: Face ID, Touch ID, Windows Hello, Android fingerprint |
 | **One active device** | Server-side sessions; a new login revokes the old one, and the old device is notified live |
 
@@ -22,7 +22,7 @@ npm run dev                 # http://localhost:3000
 npm test                    # unit tests (Vitest)
 ```
 
-With no SMTP or Twilio credentials, the app runs in **dev mode**. The code prints in the server console and appears in a yellow banner on the verify screen, so reviewers can try every flow without any setup.
+With no SMTP, Brevo or Twilio credentials, the app runs in **dev mode**. The code prints in the server console and appears in a yellow banner on the verify screen, so reviewers can try every flow without any setup.
 
 > **Biometrics need a secure context.** `localhost` works. To try Face ID on a real phone, deploy it (e.g. Vercel + Postgres) or tunnel it over HTTPS (`ngrok http 3000`).
 
@@ -95,7 +95,7 @@ src/lib/
   otp.ts                      code generation, hashing, issue/verify with limits
   session.ts                  single-device session creation and validation
   webauthn.ts                 relying-party config and challenge cookie
-  delivery.ts                 SMTP / Twilio / dev-console delivery
+  delivery.ts                 SMTP / Brevo SMS / Twilio / dev-console delivery
   validation.ts               zod schemas, phone/email normalisation, age
   http.ts, rate-limit.ts      route wrapper: origin check, rate limit, errors
 src/app/api/...               REST endpoints (signup, otp, passkey, session, logout)
@@ -106,7 +106,7 @@ src/lib/__tests__/            Vitest unit tests
 
 ## Production notes
 * Change `provider` in `prisma/schema.prisma` to `postgresql` (Neon, Supabase, Railway) for serverless hosting.
-* Set `SMTP_*` (e.g. a Gmail app password, Resend, SendGrid) and/or `TWILIO_*` for real delivery. `DEV_SHOW_OTP` is ignored in production.
+* Set `SMTP_*` (e.g. a Gmail app password or Brevo SMTP key) and `BREVO_API_KEY` (or `TWILIO_*`) for real delivery. `DEV_SHOW_OTP` is ignored in production.
 * Replace the in-memory rate limiter with Redis (Upstash) when running more than one instance.
 * Possible next steps: push notifications to the old device (WebSocket/SSE), a "this wasn't me" email when a device is replaced, a TOTP authenticator app, and account recovery.
 

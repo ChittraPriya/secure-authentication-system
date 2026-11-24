@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
+import { DeliveryError } from "./delivery";
 import { OtpError } from "./otp";
 import { rateLimit } from "./rate-limit";
 
@@ -39,6 +40,7 @@ export function route(name: string, opts: { limit: number; windowMs?: number }, 
     } catch (e) {
       if (e instanceof ZodError) return fail(e.issues[0]?.message ?? "Invalid input", 422, { field: e.issues[0]?.path.join(".") });
       if (e instanceof OtpError) return fail(e.message, e.status, e.retryAfter ? { retryAfter: e.retryAfter } : undefined);
+      if (e instanceof DeliveryError) return fail(e.message, 502);
       console.error(`[${name}]`, e);
       return fail("Something went wrong. Please try again.", 500);
     }
