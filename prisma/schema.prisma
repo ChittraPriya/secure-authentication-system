@@ -1,0 +1,92 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id         String    @id @default(cuid())
+  firstName  String
+  surname    String
+  dob        DateTime
+  email      String?   @unique
+  phone      String?   @unique
+  verifiedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  sessions Session[]
+  passkeys Passkey[]
+  events   SecurityEvent[]
+}
+
+/// One-time 6-digit codes. Only an HMAC of the code is stored.
+model OtpCode {
+  id         String    @id @default(cuid())
+  identifier String // normalised email or E.164 phone
+  purpose    String // SIGNUP | LOGIN
+  codeHash   String
+  attempts   Int       @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  ip         String?
+  createdAt  DateTime  @default(now())
+
+  @@index([identifier, purpose, createdAt])
+}
+
+/// Server-side sessions. A user may have at most ONE row with revokedAt = null.
+model Session {
+  id            String    @id @default(cuid())
+  userId        String
+  deviceId      String
+  deviceLabel   String
+  method        String // OTP | PASSKEY
+  ip            String?
+  userAgent     String?
+  createdAt     DateTime  @default(now())
+  lastSeenAt    DateTime  @default(now())
+  expiresAt     DateTime
+  revokedAt     DateTime?
+  revokedReason String? // SIGNED_IN_ELSEWHERE | LOGOUT | ADMIN
+  replacedBy    String? // label of the device that took over
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, revokedAt])
+}
+
+/// WebAuthn credentials (Face ID, Touch ID, Windows Hello, Android fingerprint, security keys).
+model Passkey {
+  id         String    @id // credential ID (base64url)
+  userId     String
+  publicKey  Bytes
+  counter    Int       @default(0)
+  transports String? // comma-separated
+  deviceType String // singleDevice | multiDevice
+  backedUp   Boolean   @default(false)
+  nickname   String
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model SecurityEvent {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String
+  detail    String?
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
