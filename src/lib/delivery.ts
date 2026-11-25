@@ -48,15 +48,20 @@ export async function sendOtp(channel: Channel, to: string, code: string, purpos
   const action = purpose === "SIGNUP" ? "verify your account" : purpose === "CONTACT" ? "verify this contact method" : "sign in";
 
   if (channel === "email" && smtpConfigured()) {
-    const port = Number(process.env.SMTP_PORT ?? 465);
+    const port = Number(process.env.SMTP_PORT || 465);
     const transport = nodemailer.createTransport({
-      host: process.env.SMTP_HOST,
+      host: process.env.SMTP_HOST!.trim(),
       port,
-      secure: port === 465,
-      auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS },
+      secure: port === 465, // 465 = implicit TLS; 587 = STARTTLS
+      auth: {
+        user: process.env.SMTP_USER!.trim(),
+        pass: process.env.SMTP_PASS!.replace(/\s+/g, ""), // Gmail shows app passwords with spaces
+      },
+      connectionTimeout: 10_000,
     });
-    await transport.sendMail({
-      from: process.env.MAIL_FROM ?? process.env.SMTP_USER,
+    try {
+      await transport.sendMail({
+      from: process.env.MAIL_FROM?.trim() || process.env.SMTP_USER!.trim(),
       to,
       subject: `${code} is your OneKey code`,
       text: `Your code to ${action} is ${code}. It expires in 5 minutes. If you didn't request this, ignore this email.`,
@@ -65,7 +70,13 @@ export async function sendOtp(channel: Channel, to: string, code: string, purpos
         <p style="color:#555">Use this code to ${action}. It expires in 5 minutes.</p>
         <div style="font-size:32px;letter-spacing:10px;font-weight:700;background:#f3f4f6;border-radius:12px;padding:16px;text-align:center">${code}</div>
         <p style="color:#888;font-size:12px;margin-top:16px">Didn't request this? You can safely ignore this email.</p></div>`,
-    });
+      });
+    } catch (e) {
+      const err = e as { code?: string; responseCode?: number; response?: string; message?: string };
+      // Log the provider's reason (never the password) so `npm run email:test` / server logs explain it.
+      console.error(`[OneKey] SMTP send failed: ${err.code ?? ""} ${err.responseCode ?? ""} ${(err.response ?? err.message ?? "").slice(0, 200)}`);
+      throw new DeliveryError("We couldn't send the email right now. Please try again in a moment.");
+    }
     return { delivered: true, via: "smtp" };
   }
 

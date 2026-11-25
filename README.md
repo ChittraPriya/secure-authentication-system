@@ -20,6 +20,7 @@ cp .env.example .env        # then set SESSION_SECRET and OTP_PEPPER to long ran
 npx prisma db push          # creates the SQLite database
 npm run dev                 # http://localhost:3000
 npm test                    # unit tests (Vitest)
+npm run email:test -- you@example.com   # check SMTP settings and send a test email
 ```
 
 With no SMTP, Brevo or Twilio credentials, the app runs in **dev mode**. The code prints in the server console and appears in a yellow banner on the verify screen, so reviewers can try every flow without any setup.
