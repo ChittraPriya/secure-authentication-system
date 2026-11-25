@@ -1,6 +1,8 @@
-# OneKey — Passwordless Auth with Biometrics & Single-Device Sessions
+# Secure Authentication System
 
-A Next.js 15 (App Router) + TypeScript app that implements the assignment:
+**OneKey** — passwordless authentication with biometrics and single-device sessions.
+
+A modern, secure authentication app built with Next.js 15 (App Router) and TypeScript. It provides:
 
 | Requirement | Implementation |
 |---|---|
@@ -113,3 +115,7 @@ src/lib/__tests__/            Vitest unit tests
 
 ## Tech stack
 Next.js 15 · React 19 · TypeScript · Tailwind CSS · Prisma (SQLite/Postgres) · SimpleWebAuthn · jose (JWT) · Zod · Nodemailer · Vitest
+
+## Author
+
+Chittra Priya K
