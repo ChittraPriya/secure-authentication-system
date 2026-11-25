@@ -37,7 +37,15 @@ export function LoginForm() {
 
   if (meta) {
     return (
-      <AuthShell title="Enter your code" subtitle="If an account exists, a code is on its way.">
+      <AuthShell
+        title="Enter your code"
+        subtitle={
+          <>
+            If an account exists, a code is on its way. No code?{" "}
+            <Link href="/signup" className="font-medium text-accent-text hover:underline">Create an account first</Link>
+          </>
+        }
+      >
         <OtpStep purpose="LOGIN" channel={channel} identifier={identifier} meta={meta} onMeta={setMeta} onBack={() => setMeta(null)} onVerified={done} />
       </AuthShell>
     );

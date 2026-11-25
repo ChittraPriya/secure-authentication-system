@@ -3,13 +3,16 @@
 // Reads .env (Node's --env-file). Never prints your password.
 import nodemailer from "nodemailer";
 
-const to = process.argv[2];
+const to = process.argv.slice(2).find((a) => !a.startsWith("--"));
 const env = (k) => (process.env[k] ?? "").trim();
 const host = env("SMTP_HOST");
 const port = Number(env("SMTP_PORT") || 465);
 const user = env("SMTP_USER");
 const pass = (process.env.SMTP_PASS ?? "").replace(/\s+/g, "");
-const from = env("MAIL_FROM") || user;
+const from =
+  env("MAIL_FROM") ||
+  (env("SMTP_FROM") ? (env("SMTP_FROM_NAME") ? `"${env("SMTP_FROM_NAME")}" <${env("SMTP_FROM")}>` : env("SMTP_FROM")) : user);
+const verifyOnly = process.argv.includes("--verify-only");
 
 const fail = (msg, hint) => {
   console.error(`\n✖ ${msg}`);
@@ -29,7 +32,7 @@ if (!host || !user || !pass) {
 if (/example\.com|app-password/.test(user + pass + from)) {
   fail("SMTP values still contain the example placeholders.", "Replace you@example.com / app-password with your real details.");
 }
-if (!to) fail("No recipient given.", "Run: npm run email:test -- your-address@gmail.com");
+if (!to && !verifyOnly) fail("No recipient given.", "Run: npm run email:test -- your-address@gmail.com");
 
 const transport = nodemailer.createTransport({ host, port, secure: port === 465, auth: { user, pass }, connectionTimeout: 10_000 });
 
@@ -49,6 +52,11 @@ try {
   process.stdout.write("  1/2 Logging in to SMTP server… ");
   await transport.verify();
   console.log("ok");
+  console.log(`  sender: ${from.replace(/[^<\s"]{2}[^@<]*@/, (m) => m.slice(0, 2) + "***@")}`);
+  if (verifyOnly) {
+    console.log("\n✔ Login works (no email sent: --verify-only).");
+    process.exit(0);
+  }
   process.stdout.write(`  2/2 Sending test email to ${to}… `);
   const info = await transport.sendMail({
     from,
@@ -63,6 +71,9 @@ try {
   console.log("failed");
   const reason = e.response || e.message;
   const hint =
+    (/unauthori[sz]ed ip/i.test(reason)
+      ? "Brevo is blocking this computer's IP address. In Brevo go to Settings → Security → Authorised IPs, then authorise this IP (or turn off IP blocking), and run this test again."
+      : undefined) ??
     hints[e.code] ??
     (/sender|from/i.test(reason) ? "The sender address isn't allowed. Set MAIL_FROM to an address this account may send from (for Brevo: a verified sender)." : undefined);
   fail(`${e.code ?? "Error"}: ${String(reason).slice(0, 200)}`, hint);

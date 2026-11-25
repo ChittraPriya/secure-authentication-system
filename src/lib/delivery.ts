@@ -11,6 +11,19 @@ const smtpConfigured = () => Boolean(process.env.SMTP_HOST && process.env.SMTP_U
 const brevoConfigured = () => Boolean(process.env.BREVO_API_KEY);
 const twilioConfigured = () => Boolean(process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM);
 
+/**
+ * Sender address. Accepts MAIL_FROM ("Name <addr>"), or SMTP_FROM + optional SMTP_FROM_NAME.
+ * Falls back to SMTP_USER — fine for Gmail, but Brevo needs a verified sender.
+ */
+export function mailFrom() {
+  const full = process.env.MAIL_FROM?.trim();
+  if (full) return full;
+  const addr = process.env.SMTP_FROM?.trim();
+  const name = process.env.SMTP_FROM_NAME?.trim();
+  if (addr) return name ? `"${name.replace(/"/g, "")}" <${addr}>` : addr;
+  return process.env.SMTP_USER?.trim() ?? "";
+}
+
 /** Brevo sender rules: up to 11 letters/digits, or 12–15 digits. */
 export function brevoSender(raw = process.env.BREVO_SMS_SENDER ?? "OneKey") {
   const clean = raw.replace(/[^A-Za-z0-9]/g, "");
@@ -61,7 +74,7 @@ export async function sendOtp(channel: Channel, to: string, code: string, purpos
     });
     try {
       await transport.sendMail({
-      from: process.env.MAIL_FROM?.trim() || process.env.SMTP_USER!.trim(),
+      from: mailFrom(),
       to,
       subject: `${code} is your OneKey code`,
       text: `Your code to ${action} is ${code}. It expires in 5 minutes. If you didn't request this, ignore this email.`,
